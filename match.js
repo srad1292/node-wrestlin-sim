@@ -2,10 +2,11 @@
 const prompt = require('prompt-sync')();
 
 let bigGuy = {
+    id: 0,
     name: 'Big Guy',
     height: 75,
     weight: 240,
-    hp: 300,
+    hp: 30,
     stats: {
         speed: 5,
         agility: 3,
@@ -19,10 +20,11 @@ let bigGuy = {
 }
 
 let smallGuy = {
+    id: 1,
     name: 'Small Guy',
     height: 63,
     weight: 190,
-    hp: 230,
+    hp: 30,
     stats: {
         speed: 8,
         agility: 8,
@@ -41,8 +43,8 @@ async function startMatch() {
         let bigGuyClone = {...bigGuy, stats: {...bigGuy.stats}};
         let smallGuyClone = {...smallGuy, stats: {...smallGuy.stats}};
         await update(bigGuyClone, smallGuyClone);
-        // check if play again
-        play = false;
+        // display results if match over
+        play = askToPlayAgain(bigGuyClone, smallGuyClone);
     } 
 
 
@@ -94,21 +96,23 @@ function buildRightPaddedString(value, maxLength, whiteSpaceCount) {
 }
 
 async function update(big, small) {
+    let inControl;
     while(big.hp > 0 && small.hp > 0) {
         console.clear();
         // Determine initiative
-        let inControl = determineInitiative(big, small);
+        if(!inControl) {
+            inControl = determineInitiative(big, small);
+        }
         let selectedAbility = abilitySelection(big,small,inControl);
         // Show who wins ability contest
         let contestWinner = await determineContestWinner(big,small,inControl,selectedAbility);
         // pick action
         let action = pickAction(big,small,selectedAbility,contestWinner); 
         // perform action
-        // determine outcome
-        // display results if match over
+        inControl = await performAction(big,small,contestWinner,action);
     }
-    // console.log(`The match is over!`);
-    // bigGuy.hp <= 0 ? console.log(`${small.name} has won!`) : console.log(`${big.name} has won!`);
+    
+    
 }
 
 function determineInitiative(big, small) {
@@ -228,6 +232,172 @@ async function determineContestWinner(big,small,inControl,selectedAbility) {
 }
 
 function pickAction(big,small,selectedAbility,contestWinner) {
+    let moves = getTestMoves();
+    let moveSelected = false;
+    let moveInputFailed = false;
+    let selectedMove = '';
+    do {
+        printPickActionScreen(big, small, contestWinner, moves);
+        if(moveInputFailed) {
+            console.log("Last input was invalid.  Try again.");
+        }
+        try {
+            let userInput = prompt(`Select Move(1-${moves.length}) or Quit(q): `).trim().toLowerCase();
+            if(userInput === 'q') {
+                process.exit();
+            }
+            userInput = parseInt(userInput);
+            if(userInput >= 1 && userInput <= moves.length) {
+                moveSelected = true;
+                selectedMove = moves[userInput - 1];
+            } else {
+                moveInputFailed = true;
+            }
+        } catch (e) {
+            moveInputFailed = true;
+        }
+    } while(!moveSelected);
+
+    return selectedMove;
+}
+
+function printPickActionScreen(big, small, contestWinner, moves) {
+    console.clear();
+    let matchDisplay = buildMatchDisplay(big, small);
+    matchDisplay.forEach(line => console.log(line));
+    let matchListDisplay = buildMoveListDisplay(moves);
+    console.log("");
+    matchListDisplay.forEach(line => console.log(line));
+    console.log("");
+    console.log(`${contestWinner.name}, what move will you attempt?`);
+}
+
+function buildMoveListDisplay(moves) {
+    // 60
+    let lines = [
+        '============================================================',
+        '|  Input  |  Move Name            |  Move Type             |',
+        '|---------|-----------------------|------------------------|',
+
+    ];
+    moves.forEach(move => {
+        lines.push(`|  ${move.id+1}:     |  ${buildRightPaddedString(move.name, 19, 2)}|  ${buildRightPaddedString(move.type, 19, 3)}|`);
+        lines.push('|---------|-----------------------|------------------------|');
+    });
+    lines.push('============================================================');
+    return lines;
+}
+
+
+function getTestMoves() {
+    return [
+        {
+            id: 0,
+            name: 'Clothesline',
+            type: 'Running Strike',
+            damage: [12,20],
+        },
+        {
+            id: 1,
+            name: 'Headlock',
+            type: 'Grapple',
+            damage: [5,7],
+        },
+        {
+            id: 2,
+            name: 'Drop Kick',
+            type: 'Jumping Strike',
+            damage: [10,20],
+        },
+        {
+            id: 3,
+            name: 'Chops',
+            type: 'Strike',
+            damage: [8,15],
+        },
+        {
+            id: 4,
+            name: 'Elbow Slam',
+            type: 'Strike',
+            damage: [12,24],
+        },
+    ]
+}
+
+async function performAction(big,small,contestWinner,action) {
+    console.clear();
+    let matchDisplay = buildMatchDisplay(big, small);
+    matchDisplay.forEach(line => console.log(line));
+    console.log(`${contestWinner.name} is attempting: ${action.name}`);
+    await delay(500);
+    let outcome = determineOutcome(big,small,contestWinner,action);
+
+    try {
+        if(outcome.isCriticalFailure) { console.log(`A critical miss!\n${outcome.whoTookDamage.name} takes ${outcome.damageRoll} points of damage!`); }
+        else if(outcome.isCriticalSuccess) { console.log(`A critical hit!\n${outcome.whoTookDamage.name} takes ${outcome.damageRoll} points of damage!`); }
+        else { console.log(`A hit! \n${outcome.whoTookDamage.name} takes ${outcome.damageRoll} points of damage!`); }
+        
+        let userInput = prompt(`Continue (Q to quit):`).trim().toLowerCase();
+        if(userInput === 'q') {
+            process.exit();
+        } else {
+            big.hp = big.id === outcome.whoTookDamage.id ? Math.max(0, big.hp-outcome.damageRoll) : big.hp;
+            small.hp = small.id === outcome.whoTookDamage.id ? Math.max(0, small.hp-outcome.damageRoll) : small.hp;
+            outcome.whoTakesControl;
+        }
+    } catch(e) {
+        return winner;
+    }
+}
+
+function determineOutcome(big,small,contestWinner,action) {
+    let damageRoll = Math.ceil(Math.random() * ((action.damage[1]+1) - action.damage[0]) + action.damage[0])-1;
+    let successRoll = Math.ceil(Math.random() * 20);
+    let whoTookDamage, whoTakesControl;
+    let bigPerforming = big.id === contestWinner.id;
+    if(successRoll === 1) {
+        // crit fail
+        damageRoll = Math.ceil(damageRoll/2);
+        whoTookDamage = bigPerforming ? big : small;
+        whoTakesControl = bigPerforming ? small : big;
+    } else if(successRoll === 20) {
+        // crit success
+        damageRoll = Math.floor(damageRoll*1.5);
+        whoTookDamage = bigPerforming ? small : big;
+        whoTakesControl = bigPerforming ? big : small;
+    } else {
+        whoTookDamage = bigPerforming ? small : big;
+    }
+
+    return {
+        whoTookDamage,
+        whoTakesControl,
+        damageRoll,
+        isCriticalFailure: successRoll === 1,
+        isCriticalSuccess: successRoll === 20
+    };
+}
+
+function askToPlayAgain(big, small) {
+    let validInput = false;
+    let input = '';
+    while(!validInput) {
+        console.clear();
+        let matchDisplay = buildMatchDisplay(big, small);
+        matchDisplay.forEach(line => console.log(line));
+        console.log(`The match is over!`);
+        bigGuy.hp <= 0 ? console.log(`${small.name} has won!`) : console.log(`${big.name} has won!`);
+        console.log("");
+        let userInput = prompt('Play Again?(y/n): ').trim().toLowerCase();
+        if(userInput === 'y') {
+            validInput = true;
+            input = userInput;
+        }
+        else if(userInput === 'n') {
+            process.exit();
+        }
+    }
+    return input === 'y';
     
 }
 
