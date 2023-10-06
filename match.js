@@ -6,7 +6,7 @@ let bigGuy = {
     name: 'Big Guy',
     height: 75,
     weight: 240,
-    hp: 30,
+    hp: 500,
     stats: {
         speed: 5,
         agility: 3,
@@ -24,7 +24,7 @@ let smallGuy = {
     name: 'Small Guy',
     height: 63,
     weight: 190,
-    hp: 30,
+    hp: 400,
     stats: {
         speed: 8,
         agility: 8,
@@ -116,7 +116,7 @@ async function update(big, small) {
 }
 
 function determineInitiative(big, small) {
-    return Math.ceil(Math.random()*10) >= 5 ? big : small; 
+    return Math.ceil(Math.random()*10) > 5 ? big : small; 
 }
 
 function abilitySelection(big, small, inControl) {
